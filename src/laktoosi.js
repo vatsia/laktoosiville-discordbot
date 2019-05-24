@@ -18,6 +18,11 @@ var bot = new Discord.Client({
 });
 
 bot.on('ready', function(event){
+    process.argv.forEach(arg => {
+        if(arg == "resetbyself"){
+            logger.info("RESET OK!")
+        }
+    })
     logger.info("CONN");
     logger.info("LOGIN: " + bot.username + " (" + bot.id + ")" );
 });
@@ -41,7 +46,16 @@ bot.on('message', function(user, user_id, channel_id, message, event){
                 const today = new Date();
                 get_menu_by_date(today.getFullYear(), today.getMonth(), today.getDay(), channel_id);
                 break;
+
+            case 'reload':
+                bot.sendMessage({
+                    to: channel_id,
+                    message: "Venaa sekka"
+                })
+                reload_bot()
+                break;
             default:
+                logger.info("MSG:" + user + "(" + user_id + "):" + channel_id + " :" + message)
                 break;
         }
     }
@@ -70,4 +84,21 @@ const get_menu_by_date = function(year, month, day, channel){
 
         })
     
+}
+
+const reload_bot = function(){
+    logger.warn("RELOADING")
+    setTimeout(function(){
+        process.on("exit", function(){
+            process.argv.push("resetbyself")
+            newargs = process.argv
+            newargs.push("resetbyself")
+            require("child_process").spawn(process.argv.shift(), newargs, {
+                cwd: process.cwd(),
+                detached: true,
+                stdio: "inherit"
+            })
+        })
+        process.exit()
+    }, 5000)
 }
