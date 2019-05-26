@@ -17,6 +17,8 @@ var bot = new Discord.Client({
     autorun: true
 });
 
+let days = ['Sunnuntai','Maanantai', 'Tiistai', 'Keskiviikko', 'Torstai', 'Perjantai', 'Lauantai'];
+
 bot.on('ready', function(event){
     process.argv.forEach(arg => {
         if(arg == "resetbyself"){
@@ -35,7 +37,7 @@ bot.on('message', function(user, user_id, channel_id, message, event){
         args = args.splice(1);
         switch (command) {
             case 'oispa':
-            logger.info("TRIGGERING: oispa");
+                logger.info("TRIGGERING: oispa");
                 bot.sendMessage({
                     to: channel_id,
                     message: "kaljaa"
@@ -44,15 +46,26 @@ bot.on('message', function(user, user_id, channel_id, message, event){
             case 'safkaa':
                 logger.info("TRIGGERING: food");
                 const today = new Date();
-                get_menu_by_date(today.getFullYear(), today.getMonth(), today.getDay(), channel_id);
+                get_menu_by_date(today, channel_id, true, false);
                 break;
-
+            case 'kaikkisafkat':
+                logger.info("TRIGGERING: all foods");
+                const dates = get_dates_of_week(new Date());
+                dates.forEach(day => {
+                    get_menu_by_date(day, channel_id, false, true);
+                })
+                break;
             case 'reload':
                 bot.sendMessage({
                     to: channel_id,
                     message: "Venaa sekka"
                 })
-                reload_bot()
+                reload_bot();
+                break;
+
+            case 'painuvittuu':
+                logger.warn("EXIT REQUEST BY USER")
+                process.exit()
                 break;
             default:
                 logger.info("MSG:" + user + "(" + user_id + "):" + channel_id + " :" + message)
@@ -61,25 +74,35 @@ bot.on('message', function(user, user_id, channel_id, message, event){
     }
 })
 
-const get_menu_by_date = function(year, month, day, channel){
-    const url = botsettings.food_api_url + "" + botsettings.food_restaurant_id + "/" + year + "/" + month + "/" + day + "/" + botsettings.food_language;
+const get_menu_by_date = function(date, channel, say_no_service, say_weekday){
+    const url = botsettings.food_api_url + "" + botsettings.food_restaurant_id + "/" + date.getFullYear() + "/" + (date.getMonth() + 1) + "/" + date.getDate() + "/" + botsettings.food_language;
     logger.info("FETCHING:" + url);
+
     fetch(url)
-        .then( res => res.json())
+        .then(res => res.json())
         .then(json => {
             foods = json.courses
             if(foods.length > 0){
+                var food_str = "";
+                if(say_weekday){
+                    food_str = String(days[date.getDay()]) +  ': ';
+                }
                 foods.forEach(element => {
-                    bot.sendMessage({
-                        to: channel,
-                        message: element.title_fi
-                    })
+                    food_str = food_str + element.title_fi + '\n';
                 })
-            }else{
+                console.log(food_str)
                 bot.sendMessage({
                     to: channel,
-                    message: "Janille ei enää tarjoilla"
+                    message: food_str
                 })
+            }else{
+                if(say_no_service){
+                    bot.sendMessage({
+                        to: channel,
+                        message: "Janille ei enää tarjoilla"
+                    })
+                }
+                
             }
 
         })
@@ -90,9 +113,11 @@ const reload_bot = function(){
     logger.warn("RELOADING")
     setTimeout(function(){
         process.on("exit", function(){
-            process.argv.push("resetbyself")
             newargs = process.argv
-            newargs.push("resetbyself")
+            if(!newargs.includes("resetbyself")){
+                newargs.push("resetbyself")
+            }
+            
             require("child_process").spawn(process.argv.shift(), newargs, {
                 cwd: process.cwd(),
                 detached: true,
@@ -101,4 +126,15 @@ const reload_bot = function(){
         })
         process.exit()
     }, 5000)
+}
+
+/** HELPER FUNCTIONS */
+const get_dates_of_week = function(current_date){
+    let dates = new Array();
+    current_date.setDate((current_date.getDate() - current_date.getDay() + 1));
+    for(let i = 0; i <= 6; i++){
+        dates.push(new Date(current_date));
+        current_date.setDate((current_date.getDate() + 1));
+    }
+    return dates;
 }
