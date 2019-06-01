@@ -1,0 +1,25 @@
+
+#Node npm yarn
+node_modules/
+yarn.lock
+yarn-error.log
+package-lock.json
+
+
+# build
+build/
+
+# IDE
+.vscode/
+.idea/
+
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+#auth
+auth.json

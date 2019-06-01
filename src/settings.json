@@ -1,5 +1,5 @@
 {
-    "food_api_url" : "https://www.sodexo.fi/ruokalistat/output/daily_json/",
-    "food_language" : "fi",
-    "food_restaurant_id" : "31332"
+  "food_api_url": "https://www.sodexo.fi/ruokalistat/output/daily_json",
+  "food_language": "fi",
+  "food_restaurant_id": "31332"
 }
