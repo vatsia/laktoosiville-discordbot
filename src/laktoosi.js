@@ -38,7 +38,7 @@ bot.on("ready", event => {
 
 bot.on("message", (user, user_id, channel_id, message, event) => {
   if (message.substring(0, 1) == "!") {
-    const args = message.substring(1).split(" ");
+    let args = message.substring(1).split(" ");
     const command = args[0];
 
     args = args.splice(1);
@@ -82,20 +82,16 @@ bot.on("message", (user, user_id, channel_id, message, event) => {
     }
   }
 });
+const prefix = `${botsettings.food_api_url}/${botsettings.food_restaurant_id}`;
+
+const fullDate = date => {
+  return `${date.getFullYear()}/${date.getMonth()}/${date.getDate()}`;
+};
+
+const locale = `${botsettings.food_language}`;
 
 const get_menu_by_date = (date, channel, say_no_service, say_weekday) => {
-  const url =
-    botsettings.food_api_url +
-    "" +
-    botsettings.food_restaurant_id +
-    "/" +
-    date.getFullYear() +
-    "/" +
-    (date.getMonth() + 1) +
-    "/" +
-    date.getDate() +
-    "/" +
-    botsettings.food_language;
+  const url = `${prefix}/${fullDate(date)}/${locale}`;
   logger.info("FETCHING:" + url);
 
   fetch(url)
