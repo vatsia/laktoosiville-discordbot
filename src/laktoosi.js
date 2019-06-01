@@ -1,9 +1,12 @@
 const Discord = require("discord.io");
 const logger = require("winston");
 const fetch = require("node-fetch");
-
-const auth = require("./auth.json");
-const botsettings = require("./settings.json");
+const {
+  AUTH_TOKEN,
+  FOOD_API_URL,
+  FOOD_LANGUAGE,
+  FOOD_RESTAURANT_ID
+} = require("./config/config");
 
 logger.remove(logger.transports.Console);
 logger.add(new logger.transports.Console(), {
@@ -12,7 +15,7 @@ logger.add(new logger.transports.Console(), {
 logger.level = "debug";
 
 const bot = new Discord.Client({
-  token: auth.token,
+  token: AUTH_TOKEN,
   autorun: true
 });
 
@@ -82,13 +85,13 @@ bot.on("message", (user, user_id, channel_id, message, event) => {
     }
   }
 });
-const prefix = `${botsettings.food_api_url}/${botsettings.food_restaurant_id}`;
+const prefix = `${FOOD_API_URL}/${FOOD_RESTAURANT_ID}`;
 
 const fullDate = date => {
   return `${date.getFullYear()}/${date.getMonth()}/${date.getDate()}`;
 };
 
-const locale = `${botsettings.food_language}`;
+const locale = `${FOOD_LANGUAGE}`;
 
 const get_menu_by_date = (date, channel, say_no_service, say_weekday) => {
   const url = `${prefix}/${fullDate(date)}/${locale}`;

@@ -22,4 +22,4 @@ build/
 .env.production.local
 
 #auth
-auth.json
+config/config.js

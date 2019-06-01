@@ -1,0 +1,13 @@
+replace this file with your own config.js file which should be:
+
+const AUTH_TOKEN ="your personal token";
+const FOOD_API_URL = "https://www.sodexo.fi/ruokalistat/output/daily_json";
+const FOOD_LANGUAGE = "fi";
+const FOOD_RESTAURANT_ID = "31332";
+
+module.exports = {
+  AUTH_TOKEN,
+  FOOD_API_URL,
+  FOOD_LANGUAGE,
+  FOOD_RESTAURANT_ID
+};
