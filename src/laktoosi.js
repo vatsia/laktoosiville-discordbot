@@ -1,12 +1,15 @@
 const Discord = require("discord.io");
 const logger = require("winston");
 const fetch = require("node-fetch");
+const axios = require("axios");
 const {
   AUTH_TOKEN,
   FOOD_API_URL,
   FOOD_LANGUAGE,
   FOOD_RESTAURANT_ID
 } = require("./config/config");
+const moment = require("moment");
+const R = require("ramda");
 
 logger.remove(logger.transports.Console);
 logger.add(new logger.transports.Console(), {
@@ -18,16 +21,8 @@ const bot = new Discord.Client({
   token: AUTH_TOKEN,
   autorun: true
 });
-
-const days = [
-  "Sunnuntai",
-  "Maanantai",
-  "Tiistai",
-  "Keskiviikko",
-  "Torstai",
-  "Perjantai",
-  "Lauantai"
-];
+moment.locale("fi");
+const daysOfWeek = moment.weekdays(true);
 
 bot.on("ready", event => {
   process.argv.forEach(arg => {
@@ -39,77 +34,39 @@ bot.on("ready", event => {
   logger.info("LOGIN: " + bot.username + " (" + bot.id + ")");
 });
 
-bot.on("message", (user, user_id, channel_id, message, event) => {
-  if (message.substring(0, 1) == "!") {
-    let args = message.substring(1).split(" ");
-    const command = args[0];
-
-    args = args.splice(1);
-    switch (command) {
-      case "oispa":
-        logger.info("TRIGGERING: oispa");
-        bot.sendMessage({
-          to: channel_id,
-          message: "kaljaa"
-        });
-        break;
-      case "safkaa":
-        logger.info("TRIGGERING: food");
-        const today = new Date();
-        get_menu_by_date(today, channel_id, true, false);
-        break;
-      case "kaikkisafkat":
-        logger.info("TRIGGERING: all foods");
-        const dates = get_dates_of_week(new Date());
-        dates.forEach(day => {
-          get_menu_by_date(day, channel_id, false, true);
-        });
-        break;
-      case "reload":
-        bot.sendMessage({
-          to: channel_id,
-          message: "Venaa sekka"
-        });
-        reload_bot();
-        break;
-
-      case "painuvittuu":
-        logger.warn("EXIT REQUEST BY USER");
-        process.exit();
-        break;
-      default:
-        logger.info(
-          "MSG:" + user + "(" + user_id + "):" + channel_id + " :" + message
-        );
-        break;
-    }
-  }
-});
 const prefix = `${FOOD_API_URL}/${FOOD_RESTAURANT_ID}`;
 
-const fullDate = date => {
-  return `${date.getFullYear()}/${date.getMonth()}/${date.getDate()}`;
+const fullDate = () => {
+  const date = moment();
+  return `${date.year()}/${date.add({ M: 1 }).month()}/${date.date()}`;
 };
 
 const locale = `${FOOD_LANGUAGE}`;
 
-const get_menu_by_date = (date, channel, say_no_service, say_weekday) => {
-  const url = `${prefix}/${fullDate(date)}/${locale}`;
+const sleep = millisecondsToWait => {
+  const now = new Date().getTime();
+  while (new Date().getTime() < now + millisecondsToWait) {}
+};
+
+const get_menu_by_date = (channel, say_no_service, say_weekday) => {
+  const url = `${prefix}/${fullDate()}/${locale}`;
   logger.info("FETCHING:" + url);
 
   fetch(url)
     .then(res => res.json())
     .then(json => {
-      foods = json.courses;
+      let foods = json.courses;
+      const foodsWithDate = R.assoc("date", `${fullDate()}`, foods);
+
+      // console.log(foodsWithDate);
       if (foods.length > 0) {
         let food_str = "";
         if (say_weekday) {
-          food_str = String(days[date.getDay()]) + ": ";
+          food_str = String(daysOfWeek[today]) + ": ";
         }
         foods.forEach(element => {
           food_str = food_str + element.title_fi + "\n";
         });
-        console.log(food_str);
         bot.sendMessage({
           to: channel,
           message: food_str
@@ -118,11 +75,58 @@ const get_menu_by_date = (date, channel, say_no_service, say_weekday) => {
         if (say_no_service) {
           bot.sendMessage({
             to: channel,
-            message: "Janille ei enää tarjoilla"
+            message: "Tänään ei lounasta"
           });
         }
       }
     });
+};
+
+const get_dates_of_week = () => {
+  const currentDate = moment();
+  const startOfWeek = currentDate.clone().startOf("isoWeek");
+  const endOfWeek = currentDate.clone().endOf("isoWeek");
+
+  let dates = [];
+  let day = startOfWeek;
+
+  while (day.isSameOrBefore(endOfWeek)) {
+    dates.push(day.toDate());
+    day = day.clone().add(1, "d");
+  }
+
+  return dates;
+};
+
+const asyncForEach = async (dates, callback) => {
+  for (let index = 0; index < dates.length; index++) {
+    const url = `${prefix}/${moment(dates[index]).format(
+      "YYYY/M/D"
+    )}/${locale}`;
+    logger.info("FETCHING:" + url);
+    const response = await fetch(url);
+    const json = await response.json();
+    const processedJson = R.assoc(
+      "date",
+      `${moment(dates[index]).format("YYYY/M/D")}`,
+      json.courses
+    );
+    // console.log(processedJson);
+    await callback(processedJson);
+  }
+};
+
+const get_menu_by_week = async callback => {
+  const dates = get_dates_of_week();
+  let listOfMenus = [];
+  const getMenus = async () => {
+    asyncForEach(dates, async menu => {
+      listOfMenus.push(menu);
+    }).then(() => {
+      callback(listOfMenus, dates);
+    });
+  };
+  await getMenus();
 };
 
 const reload_bot = () => {
@@ -144,13 +148,108 @@ const reload_bot = () => {
   }, 5000);
 };
 
-/** HELPER FUNCTIONS */
-const get_dates_of_week = current_date => {
-  let dates = new Array();
-  current_date.setDate(current_date.getDate() - current_date.getDay() + 1);
-  for (let i = 0; i <= 6; i++) {
-    dates.push(new Date(current_date));
-    current_date.setDate(current_date.getDate() + 1);
+const parseObject = async (object, callback) => {
+  const date =
+    object.date !== null
+      ? `${object.date} ${
+          daysOfWeek[moment(object.date, "YYYY/M/D").weekday()]
+        }: \n`
+      : "";
+  const onlyFoods = R.dissoc("date", object);
+  const menusPerDay = R.map(
+    (food, index) => ({
+      title_fi: R.pathOr(null, ["title_fi"], food)
+    }),
+    onlyFoods
+  );
+  let foodString = "";
+  foodString = date + "\n";
+
+  for (let key in menusPerDay) {
+    if (menusPerDay[key].title_fi !== "") {
+      foodString += menusPerDay[key].title_fi + "\n";
+    }
   }
-  return dates;
+  await callback(foodString);
 };
+
+bot.on("message", async (user, user_id, channel_id, message) => {
+  if (message.substring(0, 1) == "!") {
+    let args = message.substring(1).split(" ");
+    const command = args[0];
+
+    args = args.splice(1);
+    switch (command) {
+      case "oispa":
+        logger.info("TRIGGERING: oispa");
+        bot.sendMessage({
+          to: channel_id,
+          message: "kaljaa"
+        });
+        break;
+      case "safkaa":
+        logger.info("TRIGGERING: food");
+        get_menu_by_date(channel_id, true, false);
+        break;
+      case "kaikkisafkat":
+        logger.info("TRIGGERING: all foods");
+        let menus = [];
+        let parsedMenus = [];
+        await get_menu_by_week(data => {
+          menus = data;
+
+          say_weekday = true;
+          say_no_service = false;
+          if (menus.length > 0) {
+            menus.map(dayObject => {
+              const getString = async callback => {
+                await parseObject(dayObject, async menuString => {
+                  await callback(menuString);
+                });
+              };
+              getString(menu => {
+                bot.sendMessage({
+                  to: channel_id,
+                  message: menu
+                });
+              });
+            });
+          } else {
+            if (say_no_service) {
+              bot.sendMessage({
+                to: channel_id,
+                message: "Janille ei enää tarjoilla"
+              });
+            }
+          }
+        });
+        // const sortedMenus = sortMenuArray(menus)
+        // console.log(menus);
+        // sortedMenus.forEach(menu => {
+        //   console.log(menu);
+        // bot.sendMessage({
+        //   to: channel_id,
+        //   message: menu.title_fi
+        // });
+        // });
+        break;
+      case "reload":
+        bot.sendMessage({
+          to: channel_id,
+          message: "Venaa sekka"
+        });
+        reload_bot();
+        break;
+
+      case "painuvittuu":
+        logger.warn("EXIT REQUEST BY USER");
+        process.exit();
+        break;
+      default:
+        logger.info(
+          "MSG:" + user + "(" + user_id + "):" + channel_id + " :" + message
+        );
+        break;
+    }
+  }
+});
