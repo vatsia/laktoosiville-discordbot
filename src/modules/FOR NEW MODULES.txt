@@ -1,0 +1,34 @@
+#################################################
+######## The art of creating new modules ########
+#################################################
+
+Module should export at least one item:
+* execute
+* alternatives [optional]
+
+Execute should be function, which is getting these parameters:
+*** execute(command, args, msgObj, messageSendingCallback)
+
+* Command: command which was invoking the module execution
+* Args: Arguments of invocation
+* MsgObj: Object which contains information about invoking message
+* messageSendingCallback: Callback-function for sending messages from modules
+
+*** alternatives
+Alternatives should be an array of strings, which defines alternative 
+invocation names / commands for module.
+
+Model of the module skeleton:
+function execute(command, args, messageObject, sendMsgCb) {
+    sendMsgCb(messageObject['channel_id'], 'message')
+}
+
+module.exports.execute = execute
+module.exports.alternatives = ['alternative', 'alternative_two']
+
+*** messageObject
+{
+    username: Username of sender,
+    user_id: User id of sender,
+    channel_id: Channel id where user sent message
+}

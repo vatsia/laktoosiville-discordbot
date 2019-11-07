@@ -1,156 +1,121 @@
-const Discord = require("discord.io");
-const logger = require("winston");
-const fetch = require("node-fetch");
+const DiscordLib = require('discord.io');
+const log = require('log4js').getLogger('laktoosiville-main')
+const fs = require('fs')
+const moduleFolder = './modules'
 const {
   AUTH_TOKEN,
-  FOOD_API_URL,
-  FOOD_LANGUAGE,
-  FOOD_RESTAURANT_ID
-} = require("./config/config");
+} = require('./config/config')
 
-logger.remove(logger.transports.Console);
-logger.add(new logger.transports.Console(), {
-  colorized: true
-});
-logger.level = "debug";
+let discord
+let modules = {}
+let aliasNames = {}
 
-const bot = new Discord.Client({
-  token: AUTH_TOKEN,
-  autorun: true
-});
+function main() {
+  log.level = "INFO"
+  log.info('Starting Laktoosiville...')
+  loadModules()
+  initBot(AUTH_TOKEN)
+}
 
-const days = [
-  "Sunnuntai",
-  "Maanantai",
-  "Tiistai",
-  "Keskiviikko",
-  "Torstai",
-  "Perjantai",
-  "Lauantai"
-];
+function initBot(token) {
+  discord = new DiscordLib.Client({token: token, autorun: true})
+  discord.on('ready', handleBotReady)
+  discord.on('message', handleMessage)
+}
 
-bot.on("ready", event => {
-  process.argv.forEach(arg => {
-    if (arg == "resetbyself") {
-      logger.info("RESET OK!");
-    }
-  });
-  logger.info("CONN");
-  logger.info("LOGIN: " + bot.username + " (" + bot.id + ")");
-});
+function handleBotReady(event) {
+  log.info('Laktoosiville is connected to discord!, event = %s', JSON.stringify(event))
+}
 
-bot.on("message", (user, user_id, channel_id, message, event) => {
-  if (message.substring(0, 1) == "!") {
+function handleMessage(user, userId, channelId, message, event) {
+  if (message.substring(0, 1) === "!") {
+    log.info('Command received. Starting to parse...')
     let args = message.substring(1).split(" ");
-    const command = args[0];
+    let command = args.shift().toLowerCase()
+    const msgObj = {username: user, user_id: userId, channel_id: channelId}
 
-    args = args.splice(1);
-    switch (command) {
-      case "oispa":
-        logger.info("TRIGGERING: oispa");
-        bot.sendMessage({
-          to: channel_id,
-          message: "kaljaa"
-        });
-        break;
-      case "safkaa":
-        logger.info("TRIGGERING: food");
-        const today = new Date();
-        get_menu_by_date(today, channel_id, true, false);
-        break;
-      case "kaikkisafkat":
-        logger.info("TRIGGERING: all foods");
-        const dates = get_dates_of_week(new Date());
-        dates.forEach(day => {
-          get_menu_by_date(day, channel_id, false, true);
-        });
-        break;
-      case "reload":
-        bot.sendMessage({
-          to: channel_id,
-          message: "Venaa sekka"
-        });
-        reload_bot();
-        break;
-
-      case "painuvittuu":
-        logger.warn("EXIT REQUEST BY USER");
-        process.exit();
-        break;
-      default:
-        logger.info(
-          "MSG:" + user + "(" + user_id + "):" + channel_id + " :" + message
-        );
-        break;
+    log.info('Parsing done. Command = %s. Finding handler...', command)
+    
+    // for reloading modules straight from discord without restarting bot
+    if(command === 'reload_modules') {
+      loadModules()
+      messageSendingCallback(msgObj.channel_id, "Reloaded modules :)")
+      return
     }
+
+    // print commands availablei
+    if(command === 'commands') {
+      printCommands(msgObj.channel_id)
+    }
+
+    if(modules[command]) {
+      log.info('Module for command found! Starting it...')
+
+      modules[command].execute(command, args, msgObj, messageSendingCallback)
+    } else {
+      log.warn('Module not found. Checking alternatives')
+      if(aliasNames[command]) {
+        modules[aliasNames[command]].execute(command, args, msgObj, messageSendingCallback)
+      }else {
+        log.error('Module not found')
+      }
+    }
+
   }
-});
-const prefix = `${FOOD_API_URL}/${FOOD_RESTAURANT_ID}`;
+}
 
-const fullDate = date => {
-  return `${date.getFullYear()}/${date.getMonth()}/${date.getDate()}`;
-};
+function messageSendingCallback(channel_id, message) {
+  log.info('Sending message to channel = %s', channel_id)
+  discord.sendMessage({
+    to: channel_id,
+    message: message
+  });
+}
 
-const locale = `${FOOD_LANGUAGE}`;
+function loadModules() {
+  let moduleFiles = []
+  modules = {}
+  
+  try {
+    moduleFiles = fs.readdirSync(moduleFolder)
+  } catch(e) {
+    log.error('Error opening modulefolder! Error = %s', e.message)
+    return;
+  }
 
-const get_menu_by_date = (date, channel, say_no_service, say_weekday) => {
-  const url = `${prefix}/${fullDate(date)}/${locale}`;
-  logger.info("FETCHING:" + url);
-
-  fetch(url)
-    .then(res => res.json())
-    .then(json => {
-      foods = json.courses;
-      if (foods.length > 0) {
-        let food_str = "";
-        if (say_weekday) {
-          food_str = String(days[date.getDay()]) + ": ";
-        }
-        foods.forEach(element => {
-          food_str = food_str + element.title_fi + "\n";
-        });
-        console.log(food_str);
-        bot.sendMessage({
-          to: channel,
-          message: food_str
-        });
-      } else {
-        if (say_no_service) {
-          bot.sendMessage({
-            to: channel,
-            message: "Janille ei enää tarjoilla"
-          });
+  if(moduleFiles.length > 0) {
+    log.info('%s', JSON.stringify(moduleFiles))
+    moduleFiles.forEach(function (f) {
+      if(f.endsWith('.js')) {
+        try {
+          let command = f.replace(/\.js$/, '').toLowerCase()
+          modules[command] = require(`${moduleFolder}/${f}`)
+          if(modules[command].alternatives) {
+            log.info('Module has alternative names: %s', modules[command].alternatives)
+            modules[command].alternatives.forEach(function (altName) {
+              log.info('Added alias %s for module %s', altName, command)
+              aliasNames[altName] = command
+            })
+          }
+        }catch(e) {
+          log.error('Error loading module = %s, Error = %s', f, e.message)
         }
       }
-    });
-};
-
-const reload_bot = () => {
-  logger.warn("RELOADING");
-  setTimeout(() => {
-    process.on("exit", () => {
-      newargs = process.argv;
-      if (!newargs.includes("resetbyself")) {
-        newargs.push("resetbyself");
-      }
-
-      require("child_process").spawn(process.argv.shift(), newargs, {
-        cwd: process.cwd(),
-        detached: true,
-        stdio: "inherit"
-      });
-    });
-    process.exit();
-  }, 5000);
-};
-
-/** HELPER FUNCTIONS */
-const get_dates_of_week = current_date => {
-  let dates = new Array();
-  current_date.setDate(current_date.getDate() - current_date.getDay() + 1);
-  for (let i = 0; i <= 6; i++) {
-    dates.push(new Date(current_date));
-    current_date.setDate(current_date.getDate() + 1);
+    })
   }
-  return dates;
-};
+}
+
+function printCommands(channel_id) {
+  Object.keys(modules).forEach(function (m) {
+    let alterNames = ''
+    if(modules[m].alternatives.length > 0){
+      alterNames += '**Aliases**: '
+      modules[m].alternatives.forEach(function (name) {
+        alterNames += name + ' '
+      })
+    }
+    messageSendingCallback(channel_id, `**Module**: ${m} ${alterNames}`)
+  })
+}
+
+main()
