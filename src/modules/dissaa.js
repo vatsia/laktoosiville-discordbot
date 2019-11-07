@@ -1,7 +1,7 @@
 const fs = require('fs')
 const log = require('log4js').getLogger('laktoosiville-dissaa')
-
-const dissFilename = "./dissaa.json"
+const path = require('path')
+const dissFilename = path.join(__dirname, "dissaa.json")
 
 function execute(command, args, messageObject, sendMsgCb) {
     let dissJson = getDissData(dissFilename)
