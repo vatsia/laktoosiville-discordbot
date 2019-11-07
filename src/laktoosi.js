@@ -1,10 +1,12 @@
 const DiscordLib = require('discord.io');
 const log = require('log4js').getLogger('laktoosiville-main')
 const fs = require('fs')
-const moduleFolder = './modules'
+const path = require('path')
+
+const moduleFolder = path.join(__dirname, 'modules/')
 const {
   AUTH_TOKEN,
-} = require('./config/config')
+} = require(path.join(__dirname, './config/config'))
 
 let discord
 let modules = {}
