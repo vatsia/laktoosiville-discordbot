@@ -26,7 +26,10 @@ function execute(command, args, messageObject, sendMsgCb) {
         case 'safkaa':
         case 'safka':
             log.info('Getting food menu for one day')
-            const today = new Date();
+            let today = new Date();
+            if(today.getHours() > 12) {
+              today.setDate(today.getDate() + 1)
+            }
             get_menu_by_date(today, messageObject.channel_id, true, false);
             break
         case 'kaikkisafkat':
@@ -43,23 +46,32 @@ function execute(command, args, messageObject, sendMsgCb) {
 const fullDate = date => {
     const dayWithZero = ("0" + date.getDate()).slice(-2)
     const monthWithZero = ("0" + (date.getMonth() + 1)).slice(-2);
-    return `${date.getFullYear()}/${monthWithZero}/${dayWithZero}`
+    return `${date.getFullYear()}-${monthWithZero}-${dayWithZero}`
 };
 
 const get_menu_by_date = (date, channel, say_no_service, say_weekday) => {
-  const url = `${prefix}/${fullDate(date)}/${locale}`;
+  const url = `${prefix}/${fullDate(date)}`;
   fetch(url)
-    .then(res => res.json())
+    .then((res) => {
+      return res.json()
+    })
     .then(json => {
-      foods = json.courses;
-      if (foods.length > 0) {
+      foods = json.courses
+      if (foods.length > 0 || Object.keys(foods).length > 0) {
         let food_str = "";
         if (say_weekday) {
           food_str = "**" + String(days[date.getDay()]) + ":** ";
         }
-        foods.forEach(element => {
-          food_str = food_str + element.title_fi + "\n";
-        });
+        if(typeof(foods) === 'object'){
+          Object.keys(foods).forEach(element => {
+            food_str = food_str + foods[element].title_fi + "\n";
+          });
+        }else{
+          foods.forEach(element => {
+            food_str = food_str + element.title_fi + "\n";
+          });
+        }
+
         sayCb(channel, food_str);
       } else {
         if (say_no_service) {
