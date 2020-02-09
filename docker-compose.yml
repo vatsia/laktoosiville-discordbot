@@ -1,0 +1,13 @@
+version: '2.0' 
+
+services: 
+  laktoosiville: 
+    image: laktoosi
+    build: .
+    container_name: laktoosi
+    environment:
+    - AUTH_TOKEN=none
+    volumes:
+    - dissaa.json:/laktoosi/modules/dissaa.json
+volumes:
+  dissaa.json:
