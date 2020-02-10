@@ -4,6 +4,8 @@ const path = require('path')
 const dissFilename = path.join(__dirname, "dissaa.json")
 
 function execute(command, args, messageObject, sendMsgCb) {
+    log.info("Trying to fetch data from %s", dissFilename)
+
     let dissJson = getDissData(dissFilename)
     
     if(dissJson === null) {
